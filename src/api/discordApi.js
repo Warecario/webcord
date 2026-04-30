@@ -1,24 +1,79 @@
-export async function authenticateDiscord() {
-  // Placeholder: replace with actual Discord OAuth flow.
-  throw new Error('Discord OAuth is not implemented yet.');
+const API_BASE = 'https://discord.com/api/v10';
+
+function authHeaders(token) {
+  return {
+    Authorization: `${token.token_type} ${token.access_token}`,
+    Accept: 'application/json'
+  };
 }
 
-export async function fetchGuilds() {
-  // Placeholder: fetch real guild list from the Discord API.
-  return [];
+async function safeFetch(url, token, options = {}) {
+  if (!token?.access_token) {
+    throw new Error('Discord access token is missing');
+  }
+
+  const response = await fetch(url, {
+    ...options,
+    headers: {
+      ...options.headers,
+      ...authHeaders(token)
+    }
+  });
+
+  if (!response.ok) {
+    const payload = await response.text();
+    throw new Error(`Discord API error (${response.status}): ${payload}`);
+  }
+
+  return response.json();
 }
 
-export async function fetchChannels(guildId) {
-  // Placeholder: fetch channels for a guild using the Discord API.
-  return [];
+export async function fetchCurrentUser(token) {
+  return safeFetch(`${API_BASE}/users/@me`, token);
 }
 
-export async function fetchMessages(channelId) {
-  // Placeholder: fetch channel messages from Discord.
-  return [];
+export async function fetchGuilds(token) {
+  const guilds = await safeFetch(`${API_BASE}/users/@me/guilds`, token);
+  return guilds.filter((guild) => typeof guild.id === 'string');
+}
+
+export async function fetchChannels(guildId, token) {
+  return safeFetch(`${API_BASE}/guilds/${guildId}/channels`, token);
+}
+
+export async function fetchMessages(channelId, token) {
+  return safeFetch(`${API_BASE}/channels/${channelId}/messages?limit=25`, token);
 }
 
 export async function connectGateway(token, eventHandler) {
-  // Placeholder: connect to Discord Gateway for voice, typing, and message events.
-  throw new Error('Discord Gateway integration is not implemented yet.');
+  const url = 'wss://gateway.discord.gg/?v=10&encoding=json';
+  const ws = new WebSocket(url);
+
+  ws.addEventListener('open', () => {
+    ws.send(
+      JSON.stringify({
+        op: 2,
+        d: {
+          token: token.access_token,
+          intents: 513,
+          properties: {
+            $os: 'browser',
+            $browser: 'webcord',
+            $device: 'webcord'
+          }
+        }
+      })
+    );
+  });
+
+  ws.addEventListener('message', (event) => {
+    try {
+      const data = JSON.parse(event.data);
+      eventHandler(data);
+    } catch {
+      // Ignore malformed gateway event.
+    }
+  });
+
+  return ws;
 }

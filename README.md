@@ -10,6 +10,7 @@ This project is being built as a true web-native Discord experience: real guilds
 - Server and channel hover cards showing real-looking IDs
 - Theme switching with custom CSS variables
 - Plugin architecture for custom Webcord plugins
+- Importable BetterDiscord / Vencord style plugins and themes
 - Built-in plugin categories for appearance, chat, bots, and voice
 - Routeable URLs for `server/:serverId/channel/:channelId`
 - GitHub Pages deployment support
@@ -23,6 +24,7 @@ npm install
 ## Run locally
 
 ```bash
+npm install
 npm run dev
 ```
 
@@ -32,18 +34,35 @@ npm run dev
 npm run build
 ```
 
+## Environment
+
+Copy `.env.example` into `.env` and set your Discord OAuth client ID:
+
+```bash
+cp .env.example .env
+```
+
+Then open `.env` and set:
+
+```bash
+VITE_DISCORD_CLIENT_ID=YOUR_DISCORD_APP_CLIENT_ID
+```
+
 ## How to use
 
-- Click servers in the left sidebar
-- Click channels in the middle panel
-- Hover servers and channels to see IDs
-- Pick a theme from the theme dropdown
-- Toggle plugin features for compact mode, reactions, emoji rendering, voice call panels, and bot panels
+- Open the site and click **Continue with Discord**
+- Authorize with your Discord account
+- Webcord will load your servers, channels, and messages
+- Hover servers and channels to see real-looking IDs
+- Toggle plugin-style features for custom Webcord behavior
+- Use the import section to load BetterDiscord/Vencord theme and plugin ZIP packages or raw files from URL or file
+- Imported plugins and themes persist in your browser profile via localStorage
 
 ## Architecture
 
 - `src/pluginEngine.js` provides a plugin hook system
-- `src/pluginModules.jsx` defines plugin behavior
+- `src/extensionLoader.js` supports imported plugin and theme packages
+- `src/pluginModules.jsx` defines fallback plugin behavior
 - `src/plugins.js` exposes plugin metadata for the UI
 - `src/api/discordApi.js` is the placeholder surface for Discord OAuth/Gateway/API integration
 
