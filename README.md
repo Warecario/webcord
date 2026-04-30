@@ -32,12 +32,6 @@ npm run dev
 npm run build
 ```
 
-## Deploy to GitHub Pages
-
-```bash
-npm run deploy
-```
-
 ## How to use
 
 - Click servers in the left sidebar
