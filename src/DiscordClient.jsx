@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, Navigate, Route, Routes, useNavigate, useParams } from 'react-router-dom';
 import { fetchChannels, fetchGuilds, fetchMessages } from './api/discordApi.js';
+import { DiscordGateway } from './discordGateway.js';
 import { PluginEngine } from './pluginEngine.js';
 import { pluginModules } from './pluginModules.jsx';
 import { plugins, themes } from './themes.js';
@@ -61,9 +62,11 @@ function DiscordLayout({ token, user, guilds, logout }) {
   const navigate = useNavigate();
   const [channels, setChannels] = useState([]);
   const [messages, setMessages] = useState([]);
+  const [liveMessages, setLiveMessages] = useState([]);
   const [loadingChannels, setLoadingChannels] = useState(false);
   const [loadingMessages, setLoadingMessages] = useState(false);
   const [error, setError] = useState('');
+  const [gateway, setGateway] = useState(null);
 
   const guild = guilds.find((item) => item.id === guildId) || guilds[0];
   const [importedPlugins, setImportedPlugins] = useState([]);
@@ -97,6 +100,20 @@ function DiscordLayout({ token, user, guilds, logout }) {
       return groups;
     }, {});
   }, [allPlugins]);
+
+  const [enabledPlugins, setEnabledPlugins] = useState(() => new Set(plugins.filter((plugin) => plugin.enabledByDefault).map((plugin) => plugin.id)));
+
+  useEffect(() => {
+    setEnabledPlugins((current) => {
+      const next = new Set(current);
+      importedPlugins.forEach((plugin) => {
+        if (!next.has(plugin.id) && plugin.enabledByDefault) {
+          next.add(plugin.id);
+        }
+      });
+      return next;
+    });
+  }, [importedPlugins]);
 
   const [enabledPlugins, setEnabledPlugins] = useState(() => new Set(plugins.filter((plugin) => plugin.enabledByDefault).map((plugin) => plugin.id)));
 
@@ -232,8 +249,11 @@ function DiscordLayout({ token, user, guilds, logout }) {
       })
       .finally(() => {
         setLoadingChannels(false);
-      });
-  }, [guild, token]);
+      if (guildId && !channelId && items.length > 0) {
+        navigate(`/server/${guildId}/channel/${items[0].id}`, { replace: true });
+      }
+    });
+  }, [guild, token, guildId, channelId, navigate]);
 
   useEffect(() => {
     if (!selectedChannel || !token) {
@@ -255,10 +275,40 @@ function DiscordLayout({ token, user, guilds, logout }) {
   }, [selectedChannel, token]);
 
   useEffect(() => {
-    if (!channelId && textChannels.length > 0) {
-      navigate(`/server/${guild.id}/channel/${textChannels[0].id}`, { replace: true });
+    if (!token || !user) {
+      return;
     }
-  }, [channelId, guild, navigate, textChannels]);
+
+    const gateway = new DiscordGateway(token, (eventType, eventData) => {
+      console.log('Gateway event:', eventType, eventData);
+      switch (eventType) {
+        case 'MESSAGE_CREATE':
+          setLiveMessages((prev) => [...prev, normalizeMessage(eventData)]);
+          break;
+        // TODO: Handle more gateway events like MESSAGE_UPDATE, MESSAGE_DELETE, TYPING_START, PRESENCE_UPDATE
+        default:
+          break;
+      }
+    });
+
+    gateway.connect();
+    setGateway(gateway);
+
+    return () => {
+      gateway.disconnect();
+      setGateway(null);
+    };
+  }, [token, user]);
+
+  const combinedMessages = useMemo(() => {
+    if (liveMessages.length === 0) {
+      return messages;
+    }
+    const all = [...messages, ...liveMessages].sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+    return all.filter((msg, index, self) => index === self.findIndex((t) => t.id === msg.id));
+  }, [messages, liveMessages]);
+
+  }, [messages, liveMessages]);
 
   const togglePlugin = (pluginId) => {
     setEnabledPlugins((previous) => {
@@ -441,7 +491,7 @@ function DiscordLayout({ token, user, guilds, logout }) {
 
         <div className={`message-area ${selectedChannel ? '' : 'compact'}`}>
           {loadingMessages && <div className="plugin-description">Loading messages…</div>}
-          {messages.map((message) => {
+          {combinedMessages.map((message) => {
             const messageText = pluginEngine.applyHook(
               'formatMessageContent',
               message.content,

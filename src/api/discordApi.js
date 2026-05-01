@@ -44,36 +44,3 @@ export async function fetchChannels(guildId, token) {
 export async function fetchMessages(channelId, token) {
   return safeFetch(`${API_BASE}/channels/${channelId}/messages?limit=25`, token);
 }
-
-export async function connectGateway(token, eventHandler) {
-  const url = 'wss://gateway.discord.gg/?v=10&encoding=json';
-  const ws = new WebSocket(url);
-
-  ws.addEventListener('open', () => {
-    ws.send(
-      JSON.stringify({
-        op: 2,
-        d: {
-          token: token.access_token,
-          intents: 513,
-          properties: {
-            $os: 'browser',
-            $browser: 'webcord',
-            $device: 'webcord'
-          }
-        }
-      })
-    );
-  });
-
-  ws.addEventListener('message', (event) => {
-    try {
-      const data = JSON.parse(event.data);
-      eventHandler(data);
-    } catch {
-      // Ignore malformed gateway event.
-    }
-  });
-
-  return ws;
-}
